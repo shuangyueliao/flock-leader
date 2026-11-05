@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Flock Leader — guide a migrating bird flock south with whistle commands. Original free single-file HTML5 game.">
+<title>Flock Leader — Guide the Migration</title>
+<script>
+// 平台 SDK 按域名条件加载（独立运行时完全不加载，游戏行为不变）
+(function () {
+  var host = location.hostname || "";
+  try {
+    if (host.indexOf("crazygames") !== -1) {
+      var s1 = document.createElement("script");
+      s1.src = "https://sdk.crazygames.com/crazygames-sdk-v3.js";
+      s1.onload = function () {
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+          window.CrazyGames.SDK.init().then(function () {
+            try { window.CrazyGames.SDK.game.loadingStart(); } catch (e) {}
+            window.addEventListener("load", function () { try { window.CrazyGames.SDK.game.loadingStop(); } catch (e) {} });
+          }).catch(function () {});
+        }
+      };
+      document.head.appendChild(s1);
+      window.__portal = "crazygames";
+    } else if (host.indexOf("gamedistribution") !== -1 || host.indexOf("html5.gamedistribution.com") !== -1 || host.indexOf("gd.games") !== -1) {
+      var s2 = document.createElement("script");
+      s2.src = "https://sdk.gamedistribution.com/v2/main.min.js";
+      document.head.appendChild(s2);
+      window.__portal = "gamedistribution";
+    }
+  } catch (e) {}
+})();
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:#0c1117; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
+  #wrap { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #stage { position:relative; }
+  canvas { display:block; border-radius:10px; touch-action:none; }
+  /* ---------- HUD ---------- */
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; align-items:flex-start; justify-content:space-between; padding:calc(8px*var(--s,1)); pointer-events:none; z-index:3; color:#fff; }
+  .hbox { background:rgba(12,20,28,.55); border-radius:calc(8px*var(--s,1)); padding:calc(4px*var(--s,1)) calc(10px*var(--s,1)); }
+  .hlab { font-size:calc(9px*var(--s,1)); letter-spacing:1.5px; color:#9db4c4; font-weight:700; }
+  .hval { font-size:calc(18px*var(--s,1)); font-weight:800; line-height:1.1; }
+  #progBox { width:calc(220px*var(--s,1)); text-align:center; }
+  #progTrack { height:calc(6px*var(--s,1)); background:rgba(255,255,255,.18); border-radius:3px; margin-top:calc(3px*var(--s,1)); position:relative; }
+  #progFill { position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,#7fd0ff,#ffd76a); border-radius:3px; }
+  .icoBtn { pointer-events:auto; background:rgba(12,20,28,.55); color:#cfe3f2; border:1px solid rgba(255,255,255,.15); border-radius:calc(7px*var(--s,1)); font-size:calc(10px*var(--s,1)); font-weight:800; padding:calc(5px*var(--s,1)) calc(8px*var(--s,1)); cursor:pointer; letter-spacing:1px; }
+  .icoBtn:active { transform:scale(.94); }
+  #hudR { display:flex; gap:calc(6px*var(--s,1)); }
+  /* ---------- 指令按钮 ---------- */
+  #cmds { position:absolute; bottom:calc(8px*var(--s,1)); left:50%; transform:translateX(-50%); display:flex; gap:calc(10px*var(--s,1)); z-index:3; }
+  .cmd { position:relative; width:calc(104px*var(--s,1)); padding:calc(8px*var(--s,1)) 0 calc(6px*var(--s,1)); border:none; border-radius:calc(10px*var(--s,1)); background:rgba(12,22,32,.72); color:#fff; cursor:pointer; overflow:hidden; text-align:center; border:1px solid rgba(255,255,255,.18); }
+  .cmd .k { display:inline-block; font-size:calc(9px*var(--s,1)); border:1px solid rgba(255,255,255,.4); border-radius:3px; padding:0 4px; margin-bottom:2px; color:#cfe3f2; }
+  .cmd .l { display:block; font-size:calc(13px*var(--s,1)); font-weight:800; letter-spacing:1.5px; }
+  .cmd .st { display:block; font-size:calc(9px*var(--s,1)); color:#9fd6a8; letter-spacing:1px; margin-top:1px; }
+  .cmd .cdO { position:absolute; left:0; bottom:0; width:100%; height:0%; background:rgba(8,14,20,.75); pointer-events:none; }
+  .cmd[data-c="turn"] .l { color:#7fd0ff; } .cmd[data-c="scatter"] .l { color:#ff9a6b; } .cmd[data-c="gather"] .l { color:#9fe89f; }
+  .cmd.aiming { border-color:#ffd76a; box-shadow:0 0 12px rgba(255,215,106,.5); }
+  .cmd:active { transform:scale(.96); }
+  .cmd:focus, .icoBtn:focus, .lvBtn:focus, .bigBtn:focus { outline:none; }
+  /* ---------- 覆盖层 ---------- */
+  #overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(7,12,18,.78); z-index:6; border-radius:10px; }
+  #overlay.show { display:flex; }
+  #panel { background:#16222e; border:1px solid #33475a; border-radius:16px; padding:calc(20px*var(--s,1)) calc(26px*var(--s,1)); text-align:center; color:#fff; max-width:86%; max-height:92%; overflow:auto; }
+  #panel h1 { font-size:calc(26px*var(--s,1)); letter-spacing:3px; color:#ffd76a; margin-bottom:2px; }
+  #panel h2 { font-size:calc(20px*var(--s,1)); margin-bottom:4px; }
+  #panel .sub { color:#9db4c4; font-size:calc(11px*var(--s,1)); margin-bottom:calc(10px*var(--s,1)); letter-spacing:1px; }
+  #panel .how { text-align:left; color:#b9cbd8; font-size:calc(11px*var(--s,1)); line-height:1.55; margin-bottom:calc(10px*var(--s,1)); }
+  #panel .how b { color:#fff; }
+  #panel .how .c1{color:#7fd0ff;} #panel .how .c2{color:#ff9a6b;} #panel .how .c3{color:#9fe89f;}
+  #lvGrid { display:flex; gap:calc(8px*var(--s,1)); justify-content:center; flex-wrap:wrap; margin-bottom:calc(8px*var(--s,1)); }
+  .lvBtn { background:#213548; border:1px solid #3a5470; color:#fff; border-radius:10px; padding:calc(8px*var(--s,1)) calc(10px*var(--s,1)); cursor:pointer; min-width:calc(88px*var(--s,1)); }
+  .lvBtn:hover { background:#2c4763; }
+  .lvBtn .n { font-size:calc(12px*var(--s,1)); font-weight:800; letter-spacing:1px; }
+  .lvBtn .nm { display:block; font-size:calc(9px*var(--s,1)); color:#9db4c4; margin:2px 0; }
+  .lvBtn .stars { color:#ffd76a; font-size:calc(12px*var(--s,1)); letter-spacing:2px; }
+  .lvBtn .bs { display:block; font-size:calc(9px*var(--s,1)); color:#7f95a6; }
+  .bigBtn { background:linear-gradient(135deg,#e8a34a,#d97b3f); color:#fff; border:none; border-radius:10px; padding:calc(10px*var(--s,1)) calc(26px*var(--s,1)); font-size:calc(14px*var(--s,1)); font-weight:800; cursor:pointer; letter-spacing:1px; margin:calc(4px*var(--s,1)); }
+  .bigBtn.sec { background:#2c4763; }
+  .bigBtn:active { transform:scale(.96); }
+  .rrow { display:flex; justify-content:space-between; gap:calc(20px*var(--s,1)); font-size:calc(12px*var(--s,1)); color:#b9cbd8; padding:calc(2px*var(--s,1)) 0; }
+  .rrow b { color:#fff; }
+  .rtotal { font-size:calc(22px*var(--s,1)); font-weight:900; color:#ffd76a; margin:calc(6px*var(--s,1)) 0; }
+  .bigstars { font-size:calc(30px*var(--s,1)); color:#ffd76a; letter-spacing:6px; margin:calc(4px*var(--s,1)); text-shadow:0 2px 8px rgba(255,215,106,.4); }
+  #footer { color:#4d5e6e; font-size:11px; padding:6px; text-align:center; }
+  #rotateTip { display:none; position:absolute; top:calc(44px*var(--s,1)); left:50%; transform:translateX(-50%); background:rgba(12,20,28,.7); color:#cfe3f2; font-size:calc(10px*var(--s,1)); padding:4px 10px; border-radius:8px; z-index:4; white-space:nowrap; }
+  @media (orientation:portrait) { #rotateTip { display:block; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="hud">
+      <div class="hbox"><div class="hlab">FLOCK</div><div class="hval" id="hFlock">60/60</div></div>
+      <div class="hbox" id="progBox"><div class="hlab" id="hLevel">OPEN SKIES</div><div id="progTrack"><div id="progFill"></div></div></div>
+      <div class="hbox" style="text-align:right"><div class="hlab">SCORE</div><div class="hval" id="hScore">0</div></div>
+      <div id="hudR">
+        <button class="icoBtn" id="btnMute" type="button">SND</button>
+        <button class="icoBtn" id="btnPause" type="button">II</button>
+      </div>
+    </div>
+    <div id="rotateTip">Tip: rotate to landscape for the best view</div>
+    <div id="cmds">
+      <button class="cmd" data-c="turn" id="cmdTurn" type="button"><span class="k">1</span><span class="l">TURN</span><span class="st" id="stTurn">READY</span><span class="cdO" id="cdTurn"></span></button>
+      <button class="cmd" data-c="scatter" id="cmdScatter" type="button"><span class="k">2</span><span class="l">SCATTER</span><span class="st" id="stScatter">READY</span><span class="cdO" id="cdScatter"></span></button>
+      <button class="cmd" data-c="gather" id="cmdGather" type="button"><span class="k">3</span><span class="l">GATHER</span><span class="st" id="stGather">READY</span><span class="cdO" id="cdGather"></span></button>
+    </div>
+    <div id="overlay"><div id="panel"></div></div>
+  </div>
+  <div id="footer">Flock Leader — a free original migration game</div>
+</div>
+<script>
+"use strict";
+/* ================= Flock Leader —— 原创鸟群领航 =================
+   你是领头鸟，身后是 Boids 群体（分离/对齐/聚合涌现行为）。
+   三种哨声指令改变群体参数（转向/散开/收拢），把候鸟群带到南方。
+   模拟层（A-E 节）不依赖 DOM，可在 Node 中直接单测。 */
+
+/* ---------- A. 工具（纯函数） ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function lerp(a,b,t){return a+(b-a)*t;}
+function hyp(x,y){return Math.sqrt(x*x+y*y);}
+function angNorm(a){while(a>Math.PI)a-=6.283185307;while(a<-Math.PI)a+=6.283185307;return a;}
+function angLerp(a,b,t){return a+angNorm(b-a)*clamp(t,0,1);}
+// 点到线段距离
+function segDist(px,py,ax,ay,bx,by){var dx=bx-ax,dy=by-ay;var L2=dx*dx+dy*dy;var t=L2?((px-ax)*dx+(py-ay)*dy)/L2:0;t=clamp(t,0,1);return hyp(px-(ax+dx*t),py-(ay+dy*t));}
+function pathDist(path,x,y){var m=1e9;for(var i=0;i<path.length-1;i++){var d=segDist(x,y,path[i].x,path[i].y,path[i+1].x,path[i+1].y);if(d<m)m=d;}return m;}
+function pathYAt(path,x){if(x<=0)return path[0].y;var n=path.length-1;if(x>=path[n].x)return path[n].y;var i=Math.floor(x/200);if(i>n-1)i=n-1;var t=(x-i*200)/200;return lerp(path[i].y,path[i+1].y,t);}
+
+/* ---------- B. 常量与配置 ---------- */
+var VIEW_W=960, VIEW_H=540, FLOCK_N=60;
+var BP={ // Boids 参数（指令修改的目标值，群体行为自然涌现）
+  sepR:30, sepW:300,          // 分离半径/权重（散开时 sepW ×(1+3e)→×4）
+  aliR:62, aliW:2.0,          // 对齐
+  cohR:96, cohW:230,          // 聚合（收拢时 cohW ×(1+2e)→×3）
+  rallyW:150,                 // 领航点吸引
+  maxSpd:152, minSpd:96, accMax:950, leaderSpd:300,
+  staminaRegen:0.045, stormDrain:0.24, islandHeal:1.3,
+  stragBehind:195, stragStam:0.5,
+  scatDur:2.6, gathDur:2.8, turnDur:2.2
+};
+var CMDDEF={ turn:{cd:4}, scatter:{cd:9}, gather:{cd:9} };
+var LEVELS=[
+  {name:"OPEN SKIES",    w:5200, seed:1101, theme:0, mountains:13, mR:[55,105], corridor:86,  storms:0, swarms:2, islands:1, eagles:0},
+  {name:"THE CANYON",    w:5800, seed:1202, theme:1, mountains:18, mR:[58,115], corridor:102, storms:0, swarms:2, islands:1, eagles:0},
+  {name:"HAWK COUNTRY",  w:6200, seed:1303, theme:2, mountains:9,  mR:[55,100], corridor:125, storms:0, swarms:3, islands:1, eagles:3},
+  {name:"STORM BELT",    w:6800, seed:1404, theme:3, mountains:10, mR:[55,105], corridor:120, storms:2, swarms:3, islands:2, eagles:2},
+  {name:"THE LONG MARCH",w:7600, seed:1505, theme:4, mountains:18, mR:[58,118], corridor:98,  storms:2, swarms:3, islands:2, eagles:3}
+];
+var THEMES=[
+  {top:"#6fb7dd",bot:"#d5ebf2",land:"#c2d8ae",rockA:"#7a828e",rockB:"#49525e",water:"#7fb6d9",forest:"#4d7d4a",cloud:"255,255,255"},
+  {top:"#c98d55",bot:"#f2dcb4",land:"#dcc596",rockA:"#a06a4e",rockB:"#6e4634",water:"#8fb9c9",forest:"#7d7a3f",cloud:"255,244,224"},
+  {top:"#8ea9bd",bot:"#e2ecf0",land:"#c6d2c4",rockA:"#76808c",rockB:"#49525e",water:"#88b4cc",forest:"#5b7f5f",cloud:"255,255,255"},
+  {top:"#5c6e80",bot:"#a7bac6",land:"#a2b5a8",rockA:"#66707c",rockB:"#3e4650",water:"#6e97b4",forest:"#48684f",cloud:"222,230,240"},
+  {top:"#6a5d92",bot:"#f0bd90",land:"#cbb08a",rockA:"#8a6a5c",rockB:"#5a443c",water:"#7fa8c4",forest:"#5d7a4c",cloud:"255,236,214"}
+];
+
+/* ---------- C. 地形生成（确定性种子，保证主航线可达） ---------- */
+function makePath(seed,w){
+  var rng=mulberry32(seed),pts=[];
+  var a1=60+rng()*50,f1=0.0016+rng()*0.0009,p1=rng()*6.283;
+  var a2=28+rng()*28,f2=0.004+rng()*0.002,p2=rng()*6.283;
+  for(var x=0;x<=w+200;x+=200){
+    var y=VIEW_H/2+Math.sin(x*f1+p1)*a1+Math.sin(x*f2+p2)*a2;
+    pts.push({x:x,y:clamp(y,90,VIEW_H-90)});
+  }
+  return pts;
+}
+function rockPoly(r,rng){var n=10+Math.floor(rng()*4),v=[];for(var i=0;i<n;i++){var a=i/n*6.283,rr=r*(0.72+rng()*0.34);v.push({x:Math.cos(a)*rr,y:Math.sin(a)*rr*0.82});}return v;}
+function genLevel(idx){
+  var cfg=LEVELS[idx],rng=mulberry32(cfg.seed);
+  var L={idx:idx,name:cfg.name,width:cfg.w,seed:cfg.seed,theme:cfg.theme,corridor:cfg.corridor,
+    path:makePath(cfg.seed*7+1,cfg.w),mountains:[],storms:[],swarms:[],islands:[],eagleXs:[],forests:[],lakes:[]};
+  var i,x,y,k,m;
+  // 风暴区：中心压在航线附近（必然挡路）
+  var stormXs=[];
+  for(i=0;i<cfg.storms;i++){
+    x=cfg.w*(0.24+0.62*(i+0.5)/cfg.storms)+(rng()-0.5)*260;
+    stormXs.push(x);
+    y=clamp(pathYAt(L.path,x)+(rng()-0.5)*60,120,VIEW_H-120);
+    L.storms.push({x:x,y:y,w:310,h:340,seed:rng()*10});
+  }
+  // 岛屿：直接放在主航线上（必然可达）；有风暴关放在每个风暴之后（歇脚恢复+掉队归队）
+  for(i=0;i<cfg.islands;i++){
+    if(cfg.storms>0&&i<cfg.storms)x=clamp(stormXs[i]+560,cfg.w*0.2,cfg.w-460);
+    else x=cfg.islands===1?cfg.w*0.55:cfg.w*(0.35+0.33*i);
+    L.islands.push({x:x,y:pathYAt(L.path,x),r:75,cool:0});
+  }
+  // 虫群：航线侧向偏移
+  for(i=0;i<cfg.swarms;i++){
+    x=cfg.w*(0.18+0.66*(i+0.5)/cfg.swarms)+(rng()-0.5)*180;
+    var side=rng()<0.5?-1:1;
+    y=clamp(pathYAt(L.path,x)+side*(70+rng()*80),70,VIEW_H-70);
+    L.swarms.push({x:x,y:y});
+  }
+  // 天敌鹰触发点（镜头接近时出现）
+  for(i=0;i<cfg.eagles;i++){
+    L.eagleXs.push(cfg.w*(0.26+0.64*(i+0.5)/cfg.eagles)+(rng()-0.5)*280);
+  }
+  // 山体：拒绝采样，保证主航线留出 corridor 通道
+  for(k=0;k<cfg.mountains;k++){
+    var ok=false,tries=0,corr=cfg.corridor,r=0,mx=0,my=0;
+    while(!ok&&tries<700){
+      tries++;
+      if(tries%300===0)corr*=0.97; // 逐步放宽，避免死循环
+      r=lerp(cfg.mR[0],cfg.mR[1],rng());
+      mx=lerp(480,cfg.w-420,rng()); my=lerp(55,VIEW_H-55,rng());
+      if(mx<480||mx>cfg.w-420)continue;
+      if(pathDist(L.path,mx,my)<corr+r+6)continue;
+      var bad=false;
+      for(m=0;m<L.mountains.length;m++)if(hyp(mx-L.mountains[m].x,my-L.mountains[m].y)<r+L.mountains[m].r+40){bad=true;break;}
+      if(!bad)for(m=0;m<L.islands.length;m++)if(hyp(mx-L.islands[m].x,my-L.islands[m].y)<r+L.islands[m].r+50){bad=true;break;}
+      if(!bad)for(m=0;m<L.storms.length;m++)if(hyp(mx-L.storms[m].x,my-L.storms[m].y)<r+230){bad=true;break;}
+      if(!bad)for(m=0;m<L.swarms.length;m++)if(hyp(mx-L.swarms[m].x,my-L.swarms[m].y)<r+70){bad=true;break;}
+      if(!bad)ok=true;
+    }
+    if(ok)L.mountains.push({x:mx,y:my,r:r,poly:rockPoly(r,mulberry32(cfg.seed+k*17))});
+  }
+  // 装饰：湖泊与森林（无碰撞）
+  for(k=0;k<4;k++){
+    var tries2=0;
+    while(tries2++<80){
+      x=lerp(200,cfg.w-200,rng()); y=lerp(90,VIEW_H-90,rng());
+      var rx=70+rng()*80,ry=45+rng()*45,bad2=false;
+      for(m=0;m<L.mountains.length;m++)if(segDist(L.mountains[m].x,L.mountains[m].y,x,y,x+rx,y)<L.mountains[m].r+40||pathDist(L.path,x,y)<110){bad2=true;break;}
+      if(bad2)continue;
+      for(m=0;m<L.islands.length;m++)if(hyp(x-L.islands[m].x,y-L.islands[m].y)<L.islands[m].r+rx){bad2=true;break;}
+      if(bad2)continue;
+      L.lakes.push({x:x,y:y,rx:rx,ry:ry});break;
+    }
+  }
+  for(k=0;k<11;k++){
+    var tries3=0;
+    while(tries3++<80){
+      x=lerp(150,cfg.w-150,rng()); y=lerp(70,VIEW_H-70,rng());
+      var fr=38+rng()*46,bad3=false;
+      for(m=0;m<L.mountains.length;m++)if(hyp(x-L.mountains[m].x,y-L.mountains[m].y)<L.mountains[m].r+fr+20){bad3=true;break;}
+      if(bad3)continue;
+      for(m=0;m<L.lakes.length;m++)if(hyp(x-L.lakes[m].x,y-L.lakes[m].y)<L.lakes[m].rx+fr){bad3=true;break;}
+      if(bad3)continue;
+      for(m=0;m<L.islands.length;m++)if(hyp(x-L.islands[m].x,y-L.islands[m].y)<L.islands[m].r+fr){bad3=true;break;}
+      if(bad3)continue;
+      var puffs=[],pn=5+Math.floor(rng()*4);
+      for(var p=0;p<pn;p++)puffs.push({dx:(rng()-0.5)*fr*1.7,dy:(rng()-0.5)*fr,s:0.35+rng()*0.4});
+      L.forests.push({x:x,y:y,r:fr,puffs:puffs});break;
+    }
+  }
+  return L;
+}
+
+/* ---------- D. 场景与模拟 ---------- */
+function newScene(idx){
+  var L=genLevel(idx);
+  var scene={lvl:L,idx:idx,t:0,state:"play",rng:mulberry32(L.seed^0x9e37),
+    cam:{x:0},leader:{x:170,y:L.path[0].y,tx:320,ty:L.path[0].y,ang:0,dirx:1,diry:0,phase:0},
+    birds:[],score:0,bugs:0,arrived:0,dead:0,lost:0,
+    cds:{turn:0,scatter:0,gather:0},env:{scatter:0,gather:0,turn:0},turnDir:{x:1,y:0},turnT:0,
+    eagles:[],eagleIdx:0,cent:{x:170,y:L.path[0].y},islandHeal:false,
+    ripples:[],feathers:[],floats:[],events:[],endTimer:0,gateSung:false};
+  var rng=mulberry32(L.seed^0x51f3);
+  for(var i=0;i<FLOCK_N;i++){
+    var a=rng()*6.283,rr=Math.sqrt(rng());
+    scene.birds.push({x:170+Math.cos(a)*rr*95,y:L.path[0].y+Math.sin(a)*rr*55,
+      vx:140+rng()*20,vy:0,stamina:1,phase:rng()*6.283,ang:0,bank:0,strag:false,dead:false,arrived:false,
+      fedSw:[false,false,false]});
+  }
+  return scene;
+}
+function issueCommand(scene,type,angle){
+  if(scene.state!=="play")return false;
+  if(scene.cds[type]>0)return false;
+  scene.cds[type]=CMDDEF[type].cd;
+  var l=scene.leader;
+  if(type==="turn"){scene.turnDir={x:Math.cos(angle),y:Math.sin(angle)};scene.turnT=BP.turnDur;}
+  else if(type==="scatter"){scene.env.scatter=1;   // 分离权重临时 ×4 + 爆发冲量
+    for(var i=0;i<scene.birds.length;i++){var b=scene.birds[i];
+      if(b.dead||b.arrived||b.strag)continue;
+      var dx=b.x-l.x,dy=b.y-l.y,d=hyp(dx,dy)||1;
+      var k=150*Math.max(0.25,1-d/260);
+      b.vx+=dx/d*k;b.vy+=dy/d*k;}}
+  else if(type==="gather")scene.env.gather=1;     // 聚合权重临时 ×3
+  scene.ripples.push({x:l.x,y:l.y,t:0,c:type});
+  scene.events.push({type:"cmd",cmd:type});
+  return true;
+}
+function spawnEagle(scene){
+  var y=60+scene.rng()*(VIEW_H-120);
+  scene.eagles.push({x:scene.cam.x+VIEW_W+90,y:y,vx:-220,vy:0,ang:3.14,state:"approach",t:0,
+    lock:null,lx:0,ly:0,strikes:scene.idx>=4?2:1,phase:0});
+  scene.events.push({type:"eagle"});
+}
+function stepEagle(scene,e,dt){
+  e.phase+=dt*11;
+  var cent=scene.cent;
+  if(e.state==="approach"){
+    var dx=cent.x-e.x,dy=cent.y-e.y,d=hyp(dx,dy)||1;
+    e.x+=dx/d*245*dt; e.y+=dy/d*245*dt; e.ang=Math.atan2(dy,dx);
+    if(d<210){ // 锁定离鹰最近的鸟，预判 0.3s 后的位置俯冲
+      var best=null,bd=1e9;
+      for(var i=0;i<scene.birds.length;i++){var b=scene.birds[i];
+        if(b.dead||b.arrived||b.strag)continue;
+        var dd=hyp(b.x-e.x,b.y-e.y);if(dd<bd){bd=dd;best=b;}}
+      if(best){e.state="dive";e.t=0;e.lock=best;e.lx=best.x+best.vx*0.30;e.ly=best.y+best.vy*0.30;
+        scene.events.push({type:"dive"});}
+      else e.state="retreat";
+    }
+  }else if(e.state==="dive"){
+    e.t+=dt;
+    // 目标偏离锁定预判点 → 扑空（散开指令的解法）
+    if(e.lock&&!e.lock.dead&&!e.lock.arrived){
+      if(hyp(e.lock.x-e.lx,e.lock.y-e.ly)>55){e.state="miss";e.t=0;e.mx=undefined;scene.events.push({type:"miss"});}
+      else if(scene.env.scatter>0.2&&hyp(e.lock.x-e.x,e.lock.y-e.y)<180){
+        // 猎物在俯冲窗口内爆散 → 鹰放弃扑击（散开的核心反制）
+        e.state="miss";e.t=0;e.mx=undefined;scene.events.push({type:"miss"});}
+    }
+    var ddx=e.lx-e.x,ddy=e.ly-e.y,dd=hyp(ddx,ddy)||1;
+    e.x+=ddx/dd*470*dt; e.y+=ddy/dd*470*dt; e.ang=Math.atan2(ddy,ddx);
+    if(dd<14||e.t>1.15){
+      var killed=0;
+      for(var j=0;j<scene.birds.length&&killed<2;j++){ // 每次扑击最多抓 2 只
+        var bj=scene.birds[j];
+        if(bj.dead||bj.arrived)continue;
+        if(hyp(bj.x-e.x,bj.y-e.y)<34){bj.dead=true;scene.dead++;
+          scene.events.push({type:"death",x:bj.x,y:bj.y});killed++;}
+      }
+      if(killed>0)scene.events.push({type:"strike",n:killed});
+      else scene.events.push({type:"miss"});
+      e.state="retreat";
+    }
+  }else if(e.state==="miss"){ // 扑空：沿原方向直飞后撤离
+    e.t+=dt;
+    if(e.mx===undefined){var mx0=e.x-e.lx,my0=e.y-e.ly,mn=hyp(mx0,my0)||1;e.mx=mx0/mn;e.my=my0/mn;}
+    e.x+=e.mx*300*dt;e.y+=e.my*300*dt;e.ang=Math.atan2(e.my,e.mx);
+    if(e.t>0.55)e.state="retreat";
+  }
+  if(e.state==="retreat"){
+    var rx2=scene.cam.x+VIEW_W+240-e.x,ry2=70-e.y,rd=hyp(rx2,ry2)||1;
+    e.x+=rx2/rd*400*dt; e.y+=ry2/rd*400*dt; e.ang=Math.atan2(ry2,rx2);
+    if(e.x>scene.cam.x+VIEW_W+170){ // 只按 x 判定离场，避免途中被误删
+      if(e.strikes>1){e.strikes--;e.state="approach";e.mx=undefined;
+        e.x=scene.cam.x+VIEW_W+90;e.y=60+scene.rng()*(VIEW_H-120);}
+      else e.gone=true;
+    }
+  }
+}
+function stepLeader(scene,dt){
+  var l=scene.leader,dx=l.tx-l.x,dy=l.ty-l.y,d=hyp(dx,dy);
+  if(d>1){var mv=Math.min(d,BP.leaderSpd*dt);l.x+=dx/d*mv;l.y+=dy/d*mv;
+    l.ang=angLerp(l.ang,Math.atan2(dy,dx),Math.min(1,8*dt));}
+  l.dirx=Math.cos(l.ang);l.diry=Math.sin(l.ang);
+  l.x=clamp(l.x,scene.cam.x+26,Math.min(scene.lvl.width-24,scene.cam.x+VIEW_W-26));
+  l.y=clamp(l.y,40,VIEW_H-40);
+  for(var m=0;m<scene.lvl.mountains.length;m++){var mo=scene.lvl.mountains[m];
+    var md=hyp(l.x-mo.x,l.y-mo.y);
+    if(md<mo.r*0.95&&md>0.01){var push=mo.r*0.95-md;l.x+=(l.x-mo.x)/md*push;l.y+=(l.y-mo.y)/md*push;}}
+  l.phase+=dt*9;
+}
+function stepBoids(scene,dt){
+  var L=scene.lvl,eS=scene.env.scatter,eG=scene.env.gather,eT=scene.env.turn;
+  // 指令 → 参数目标（权重瞬时改写后随包络衰减回落，行为连续自然）
+  var sepW=BP.sepW*(1+3*eS)*(1-0.62*eG);
+  var sepR=BP.sepR*(1+1.2*eS);
+  var cohW=BP.cohW*(1+2*eG);
+  var cohR=BP.cohR*(1+0.5*eG);
+  var sepR2=sepR*sepR,aliR2=BP.aliR*BP.aliR,cohR2=cohR*cohR;
+  var birds=scene.birds,lead=scene.leader;
+  var roff=26*(1-0.75*eG); // 收拢时领航点更贴近领头鸟
+  var rxp=lead.x-lead.dirx*roff,ryp=lead.y-lead.diry*roff;
+  var heal=scene.islandHeal,cent=scene.cent;
+  for(var i=0;i<birds.length;i++){
+    var b=birds[i];if(b.dead||b.arrived)continue;
+    /* 掉队鸟：屏幕左缘徘徊，岛屿或群靠拢后归队 */
+    if(b.strag){
+      var ex=scene.cam.x+26-b.x;
+      b.x+=Math.min(1,3*dt)*ex;
+      b.y+=Math.sin(scene.t*1.7+b.phase)*14*dt;
+      b.vx=120;b.vy=Math.cos(scene.t*1.3+b.phase)*30;
+      b.stamina=Math.min(1,b.stamina+0.03*dt);
+      var rc=hyp(cent.x-b.x,cent.y-b.y);
+      if(heal||rc<170||(b.stamina>0.6&&rc<240)){b.strag=false;b.stamina=Math.max(b.stamina,0.9);}
+      b.ang=angLerp(b.ang,0,6*dt);b.bank*=0.9;b.phase+=dt*8;continue;
+    }
+    var ax=0,ay=0,sepx=0,sepy=0,alx=0,aly=0,clx=0,cly=0,nA=0,nC=0,j,o;
+    /* 三力：分离 / 对齐 / 聚合 */
+    for(j=0;j<birds.length;j++){
+      if(j===i)continue;o=birds[j];if(o.dead||o.arrived)continue;
+      var dx=b.x-o.x,dy=b.y-o.y,d2=dx*dx+dy*dy;
+      if(d2<sepR2&&d2>0.01){var dd=Math.sqrt(d2),f=(1-dd/sepR)/dd;sepx+=dx*f;sepy+=dy*f;}
+      if(d2<aliR2){alx+=o.vx;aly+=o.vy;nA++;}
+      if(d2<cohR2){clx+=o.x;cly+=o.y;nC++;}
+    }
+    ax+=sepx*sepW;ay+=sepy*sepW;
+    if(nA>0){ax+=(alx/nA-b.vx)*BP.aliW;ay+=(aly/nA-b.vy)*BP.aliW;}
+    if(nC>0){var cdx=clx/nC-b.x,cdy=cly/nC-b.y,cd=hyp(cdx,cdy);
+      if(cd>20){ax+=cdx/cd*cohW;ay+=cdy/cd*cohW;}}
+    /* 领航点吸引 */
+    var rdx=rxp-b.x,rdy=ryp-b.y,rl=hyp(rdx,rdy);
+    if(rl>46){var rw=BP.rallyW*Math.min(1,(rl-46)/110)*(1+0.5*eG);ax+=rdx/rl*rw;ay+=rdy/rl*rw;}
+    /* 转向指令：朝目标航向插值（惯性来自加速度上限） */
+    if(eT>0){var sp0=hyp(b.vx,b.vy)||1;
+      ax+=(scene.turnDir.x*sp0-b.vx)*3.4*eT;ay+=(scene.turnDir.y*sp0-b.vy)*3.4*eT;}
+    /* 山体：软规避 + 硬碰撞 */
+    var died=false,warn=false;
+    for(var m=0;m<L.mountains.length;m++){var mo=L.mountains[m];
+      var mdx=b.x-mo.x,mdy=b.y-mo.y,md2=mdx*mdx+mdy*mdy,rr=mo.r;
+      if(md2>(rr+34)*(rr+34))continue;
+      var md=Math.sqrt(md2)||1;
+      if(md<rr*0.95){b.dead=true;scene.dead++;died=true;
+        scene.events.push({type:"death",x:b.x,y:b.y});break;}
+      warn=true;
+      var aw=650*(1-(md-rr)/34);ax+=mdx/md*aw;ay+=mdy/md*aw;
+    }
+    if(died)continue;
+    /* 风暴乱流 + 体力消耗 */
+    for(var s=0;s<L.storms.length;s++){var st=L.storms[s];
+      if(Math.abs(b.x-st.x)<st.w/2&&Math.abs(b.y-st.y)<st.h/2){
+        b.stamina-=BP.stormDrain*dt;
+        ax+=Math.sin(scene.t*3.1+b.phase*5)*230;
+        ay+=Math.cos(scene.t*2.6+b.phase*7)*230+Math.sin(scene.t*0.8+st.seed)*130;
+      }}
+    /* 天敌恐慌 */
+    for(var e2=0;e2<scene.eagles.length;e2++){var eg=scene.eagles[e2];
+      if(eg.state==="retreat")continue;
+      var edx=b.x-eg.x,edy=b.y-eg.y,ed2=edx*edx+edy*edy;
+      if(ed2<16900&&ed2>1){var ed=Math.sqrt(ed2),fw=420*(1-ed/130);ax+=edx/ed*fw;ay+=edy/ed*fw;}}
+    /* 边界软约束 */
+    if(b.y<44)ay+=(44-b.y)*9;
+    if(b.y>VIEW_H-44)ay-=(b.y-(VIEW_H-44))*9;
+    if(b.x<scene.cam.x+14)ax+=(scene.cam.x+14-b.x)*7;
+    /* 积分（加速度限幅 → 转向惯性） */
+    var am=hyp(ax,ay);
+    if(am>BP.accMax){ax=ax/am*BP.accMax;ay=ay/am*BP.accMax;}
+    b.vx+=ax*dt;b.vy+=ay*dt;
+    var sp=hyp(b.vx,b.vy)||0.001;
+    var sf=0.55+0.45*clamp(b.stamina,0,1);          // 体力低 → 飞得慢掉队
+    var maxS=BP.maxSpd*sf*(1+0.22*eS),minS=BP.minSpd*sf;
+    if(b.x<lead.x-120&&!warn)maxS*=1.22;             // 落后冲刺归队（贴近山体时收油门保规避）
+    if(sp>maxS){b.vx*=maxS/sp;b.vy*=maxS/sp;}
+    else if(sp<minS&&sp>0.01){b.vx*=minS/sp;b.vy*=minS/sp;}
+    b.x+=b.vx*dt;b.y+=b.vy*dt;
+    b.stamina=Math.min(1,b.stamina+BP.staminaRegen*dt);
+    /* 岛屿歇脚恢复 */
+    for(var il=0;il<L.islands.length;il++){var io=L.islands[il];
+      var id2=(b.x-io.x)*(b.x-io.x)+(b.y-io.y)*(b.y-io.y);
+      if(id2<(io.r+26)*(io.r+26))b.stamina=Math.min(1,b.stamina+BP.islandHeal*dt);}
+    /* 虫群捕食 +2/只/次 */
+    for(var sw=0;sw<L.swarms.length;sw++){
+      if(b.fedSw[sw])continue;var sm=L.swarms[sw];
+      var sd2=(b.x-sm.x)*(b.x-sm.x)+(b.y-sm.y)*(b.y-sm.y);
+      if(sd2<2116){b.fedSw[sw]=true;scene.score+=2;scene.bugs++;
+        scene.events.push({type:"feed",x:b.x,y:b.y});}}
+    /* 掉队判定：体力耗竭且大幅落后（散开冲量可自行归队，不误判） */
+    if(b.stamina<BP.stragStam&&lead.x-b.x>BP.stragBehind){
+      b.strag=true;scene.events.push({type:"strag",x:b.x,y:b.y});}
+    /* 抵达终点 */
+    if(b.x>L.width-56){b.arrived=true;scene.arrived++;
+      scene.events.push({type:"arrive",x:b.x,y:b.y});continue;}
+    var ta=Math.atan2(b.vy,b.vx);
+    b.bank=clamp(angNorm(ta-b.ang)*2.2,-0.7,0.7);   // 朝向插值 → 转向倾斜
+    b.ang=angLerp(b.ang,ta,Math.min(1,9*dt));
+    b.phase+=dt*(8+sp*0.05);
+  }
+}
+function stepScene(scene,dt){
+  if(scene.state!=="play")return;
+  scene.events.length=0;
+  scene.t+=dt;
+  scene.cds.turn=Math.max(0,scene.cds.turn-dt);
+  scene.cds.scatter=Math.max(0,scene.cds.scatter-dt);
+  scene.cds.gather=Math.max(0,scene.cds.gather-dt);
+  scene.env.scatter=Math.max(0,scene.env.scatter-dt/BP.scatDur);
+  scene.env.gather=Math.max(0,scene.env.gather-dt/BP.gathDur);
+  if(scene.turnT>0)scene.turnT=Math.max(0,scene.turnT-dt);
+  scene.env.turn=scene.turnT>0?scene.turnT/BP.turnDur:0;
+  stepLeader(scene,dt);
+  var target=clamp(scene.leader.x-380,0,scene.lvl.width-VIEW_W);
+  scene.cam.x+=(target-scene.cam.x)*Math.min(1,5*dt);
+  // 群质心（活跃且未掉队）
+  var cx=0,cy=0,n=0;
+  for(var i=0;i<scene.birds.length;i++){var b=scene.birds[i];
+    if(b.dead||b.arrived||b.strag)continue;cx+=b.x;cy+=b.y;n++;}
+  if(n>0)scene.cent={x:cx/n,y:cy/n};
+  // 岛屿治疗/归队标记
+  scene.islandHeal=false;
+  for(var il=0;il<scene.lvl.islands.length;il++){var io=scene.lvl.islands[il];
+    io.cool=Math.max(0,io.cool-dt);
+    if(hyp(scene.cent.x-io.x,scene.cent.y-io.y)<io.r+70){
+      if(io.cool<=0){scene.events.push({type:"rest"});io.cool=6;}
+      scene.islandHeal=true;}}
+  // 鹰触发与状态机
+  while(scene.eagleIdx<scene.lvl.eagleXs.length&&scene.lvl.eagleXs[scene.eagleIdx]<scene.cam.x+VIEW_W+140){
+    spawnEagle(scene);scene.eagleIdx++;}
+  var anyGone=false;
+  for(var e3=0;e3<scene.eagles.length;e3++){stepEagle(scene,scene.eagles[e3],dt);
+    if(scene.eagles[e3].gone)anyGone=true;}
+  if(anyGone)scene.eagles=scene.eagles.filter(function(e){return !e.gone;});
+  stepBoids(scene,dt);
+  // 特效数据
+  for(var r=scene.ripples.length-1;r>=0;r--){scene.ripples[r].t+=dt;if(scene.ripples[r].t>0.9)scene.ripples.splice(r,1);}
+  for(var f=scene.feathers.length-1;f>=0;f--){var ft=scene.feathers[f];
+    ft.life-=dt;ft.x+=ft.vx*dt;ft.y+=ft.vy*dt;ft.vy+=60*dt;ft.vx*=0.98;
+    if(ft.life<=0)scene.feathers.splice(f,1);}
+  for(var fl=scene.floats.length-1;fl>=0;fl--){var fo=scene.floats[fl];
+    fo.life-=dt;fo.y-=34*dt;if(fo.life<=0)scene.floats.splice(fl,1);}
+  // 终点与结算
+  if(scene.leader.x>=scene.lvl.width-64){
+    if(!scene.gateSung){scene.gateSung=true;scene.events.push({type:"gate"});}
+    scene.endTimer+=dt;
+    var aliveLeft=0;
+    for(var q=0;q<scene.birds.length;q++){var bq=scene.birds[q];
+      if(!bq.dead&&!bq.arrived&&!bq.strag)aliveLeft++;}
+    if(scene.endTimer>4||aliveLeft===0)scene.state="done";
+  }else if(scene.dead>=FLOCK_N){scene.state="done";}
+}
+
+/* ---------- E. 音效（WebAudio 合成，惰性初始化） ---------- */
+var actx=null,master=null,muted=false,stormSrc=null,stormGain=null,noiseB=null;
+function audioInit(){
+  try{
+    if(actx)return;
+    var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    actx=new AC();master=actx.createGain();master.gain.value=muted?0:0.5;master.connect(actx.destination);
+  }catch(e){}
+}
+function beep(freq,dur,type,vol,glideTo){
+  try{
+    if(!actx)return;
+    if(actx.state==="suspended")actx.resume();
+    var o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime;
+    o.type=type||"sine";o.frequency.setValueAtTime(freq,t);
+    if(glideTo)o.frequency.linearRampToValueAtTime(glideTo,t+dur);
+    g.gain.setValueAtTime(vol||0.1,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+0.02);
+  }catch(e){}
+}
+function noiseBuf(){
+  if(noiseB)return noiseB;
+  try{noiseB=actx.createBuffer(1,actx.sampleRate,actx.sampleRate);
+    var d=noiseB.getChannelData(0);
+    for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;}catch(e){}
+  return noiseB;
+}
+function stormSet(level){ // 风暴风噪（随领头鸟距离渐强）
+  try{
+    if(!actx)return;
+    if(level<=0.01){if(stormSrc){try{stormSrc.stop();}catch(e){}stormSrc=null;}return;}
+    if(!stormSrc){var src=actx.createBufferSource();src.buffer=noiseBuf();src.loop=true;
+      var lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=420;
+      stormGain=actx.createGain();stormGain.gain.value=0;
+      src.connect(lp);lp.connect(stormGain);stormGain.connect(master);src.start();stormSrc=src;}
+    stormGain.gain.linearRampToValueAtTime(level*0.22,actx.currentTime+0.15);
+  }catch(e){}
+}
+function sfxCmd(type){
+  if(type==="turn"){beep(880,0.09,"square",0.09);setTimeout(function(){beep(1320,0.1,"square",0.09);},90);}
+  else if(type==="scatter"){beep(1900,0.06,"square",0.08,2300);setTimeout(function(){beep(2100,0.06,"square",0.08,2500);},70);setTimeout(function(){beep(2300,0.07,"square",0.08,2700);},140);}
+  else{beep(1250,0.1,"square",0.09,950);setTimeout(function(){beep(980,0.12,"square",0.09,760);},100);}
+}
+function sfxEagle(){beep(1500,0.5,"sawtooth",0.1,480);beep(2250,0.4,"square",0.04,700);}
+function sfxDeath(){beep(620,0.16,"triangle",0.1,330);}
+function sfxFeed(){beep(1500+Math.random()*500,0.05,"sine",0.05);}
+function sfxArrive(){beep(1500,0.06,"sine",0.05,1900);}
+function sfxGate(){var ns=[523,659,784,1046];for(var i=0;i<ns.length;i++)(function(f,i){setTimeout(function(){beep(f,0.28,"triangle",0.12);},i*130);})(ns[i],i);}
+
+/* ---------- F. 渲染 ---------- */
+var canvas=null,ctx=null,dprScale=1;
+function drawBird(x,y,ang,bank,ph,s,col,wing){
+  ctx.save();ctx.translate(x,y);ctx.rotate(ang+bank*0.5);
+  var w=Math.sin(ph);
+  ctx.fillStyle=col;
+  ctx.beginPath();ctx.ellipse(0,0,6.5*s,2.8*s,0,0,6.283);ctx.fill();
+  ctx.beginPath();ctx.arc(6*s,0,2.1*s,0,6.283);ctx.fill();
+  ctx.fillStyle=wing;
+  ctx.beginPath();ctx.moveTo(-1*s,0);
+  ctx.quadraticCurveTo(-4*s,-(3+5*Math.max(0,w))*s,-8*s,-(2+7*Math.max(0,w))*s);
+  ctx.quadraticCurveTo(-4*s,-1.2*s,-1*s,0);ctx.fill();
+  ctx.beginPath();ctx.moveTo(-1*s,0);
+  ctx.quadraticCurveTo(-4*s,(3+5*Math.max(0,-w))*s,-8*s,(2+7*Math.max(0,-w))*s);
+  ctx.quadraticCurveTo(-4*s,1.2*s,-1*s,0);ctx.fill();
+  ctx.restore();
+}
+function render(scene,ui){
+  var L=scene.lvl,th=THEMES[L.theme],cam=scene.cam.x;
+  // 天空
+  var bg=ctx.createLinearGradient(0,0,0,VIEW_H);
+  bg.addColorStop(0,th.top);bg.addColorStop(1,th.bot);
+  ctx.fillStyle=bg;ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // 太阳光晕
+  ctx.fillStyle="rgba(255,244,214,.5)";ctx.beginPath();ctx.arc(150-cam*0.05%VIEW_W,86,52,0,6.283);ctx.fill();
+  ctx.fillStyle="rgba(255,244,214,.2)";ctx.beginPath();ctx.arc(150-cam*0.05%VIEW_W,86,86,0,6.283);ctx.fill();
+  // 远景云（视差）
+  for(var c=0;c<ui.clouds.length;c++){var cl=ui.clouds[c];
+    var par=[0.22,0.45,0.85][cl.layer];
+    var px=((cl.x-cam*par)%(VIEW_W+360)+(VIEW_W+360))%(VIEW_W+360)-180;
+    if(cl.layer===2)continue; // 前景云稍后画
+    ctx.fillStyle="rgba("+th.cloud+","+(cl.layer===0?0.4:0.6)+")";
+    for(var p2=0;p2<cl.puffs.length;p2++){var pf=cl.puffs[p2];
+      ctx.beginPath();ctx.arc(px+pf.dx,cl.y+pf.dy,pf.r,0,6.283);ctx.fill();}}
+  // 湖泊
+  for(var lk=0;lk<L.lakes.length;lk++){var lake=L.lakes[lk];
+    var lx=lake.x-cam;if(lx<-220||lx>VIEW_W+220)continue;
+    ctx.fillStyle=th.water;ctx.beginPath();ctx.ellipse(lx,lake.y,lake.rx,lake.ry,0,0,6.283);ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.25)";ctx.beginPath();ctx.ellipse(lx-lake.rx*0.2,lake.y-lake.ry*0.25,lake.rx*0.55,lake.ry*0.4,0,0,6.283);ctx.fill();}
+  // 森林
+  for(var f=0;f<L.forests.length;f++){var fo=L.forests[f];
+    var fx=fo.x-cam;if(fx<-160||fx>VIEW_W+160)continue;
+    ctx.fillStyle=th.forest;
+    for(var fp=0;fp<fo.puffs.length;fp++){var fpf=fo.puffs[fp];
+      ctx.beginPath();ctx.arc(fx+fpf.dx,fo.y+fpf.dy,fo.r*fpf.s,0,6.283);ctx.fill();}
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    for(var fp2=0;fp2<fo.puffs.length;fp2+=2){var fq=fo.puffs[fp2];
+      ctx.beginPath();ctx.arc(fx+fq.dx+fo.r*fq.s*0.4,fo.y+fq.dy+fo.r*fq.s*0.4,fo.r*fq.s*0.4,0,6.283);ctx.fill();}}
+  // 山体（碰撞障碍）
+  for(var m=0;m<L.mountains.length;m++){var mo=L.mountains[m];
+    var mx=mo.x-cam;if(mx<-mo.r-80||mx>VIEW_W+mo.r+80)continue;
+    ctx.fillStyle="rgba(0,0,0,.22)";
+    ctx.beginPath();ctx.ellipse(mx+12,mo.y+16,mo.r*1.02,mo.r*0.8,0,0,6.283);ctx.fill();
+    var mg=ctx.createLinearGradient(mx,mo.y-mo.r,mx,mo.y+mo.r);
+    mg.addColorStop(0,th.rockA);mg.addColorStop(1,th.rockB);
+    ctx.fillStyle=mg;ctx.beginPath();
+    for(var v=0;v<mo.poly.length;v++){var vt=mo.poly[v];
+      if(v===0)ctx.moveTo(mx+vt.x,mo.y+vt.y);else ctx.lineTo(mx+vt.x,mo.y+vt.y);}
+    ctx.closePath();ctx.fill();
+    if(mo.r>86){ctx.fillStyle="rgba(255,255,255,.5)";
+      ctx.beginPath();ctx.arc(mx-mo.r*0.12,mo.y-mo.r*0.16,mo.r*0.34,0,6.283);ctx.fill();}}
+  // 中途岛
+  for(var il=0;il<L.islands.length;il++){var io=L.islands[il];
+    var ix=io.x-cam;if(ix<-140||ix>VIEW_W+140)continue;
+    ctx.fillStyle="#e5d5a2";ctx.beginPath();ctx.arc(ix,io.y,io.r,0,6.283);ctx.fill();
+    ctx.fillStyle=th.forest;ctx.beginPath();ctx.arc(ix,io.y,io.r*0.66,0,6.283);ctx.fill();
+    ctx.fillStyle="#3c5c34";ctx.beginPath();ctx.arc(ix-io.r*0.2,io.y-io.r*0.15,io.r*0.2,0,6.283);ctx.fill();
+    if(scene.islandHeal&&hyp(scene.cent.x-io.x,scene.cent.y-io.y)<io.r+70){
+      var pr=(scene.t*1.4)%1;
+      ctx.strokeStyle="rgba(255,255,255,"+(0.7*(1-pr))+")";ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(ix,io.y,io.r*(0.4+pr*0.9),0,6.283);ctx.stroke();ctx.lineWidth=1;}}
+  // 虫群
+  for(var sw=0;sw<L.swarms.length;sw++){var sm=L.swarms[sw];
+    var sx2=sm.x-cam;if(sx2<-80||sx2>VIEW_W+80)continue;
+    ctx.fillStyle="#6b5a2e";
+    for(var s3=0;s3<13;s3++){
+      var oa=s3/13*6.283+scene.t*(1.5+(s3%3)*0.4);
+      var orr=16+(s3%5)*7;
+      ctx.beginPath();ctx.arc(sx2+Math.cos(oa)*orr,sm.y+Math.sin(oa*1.3)*orr*0.6,2.4,0,6.283);ctx.fill();}}
+  // 风暴区
+  for(var st=0;st<L.storms.length;st++){var sto=L.storms[st];
+    var stx=sto.x-cam;if(stx<-260||stx>VIEW_W+260)continue;
+    var sg=ctx.createRadialGradient(stx,sto.y,10,stx,sto.y,sto.w*0.55);
+    sg.addColorStop(0,"rgba(52,62,78,.6)");sg.addColorStop(1,"rgba(52,62,78,0)");
+    ctx.fillStyle=sg;ctx.beginPath();ctx.ellipse(stx,sto.y,sto.w*0.55,sto.h*0.55,0,0,6.283);ctx.fill();
+    for(var a3=0;a3<3;a3++){
+      ctx.strokeStyle="rgba(235,240,248,.13)";ctx.lineWidth=10;
+      ctx.beginPath();ctx.arc(stx,sto.y,sto.w*(0.18+a3*0.12),scene.t*0.8*(a3%2?-1:1)+sto.seed,scene.t*0.8*(a3%2?-1:1)+sto.seed+3.6);ctx.stroke();}
+    ctx.strokeStyle="rgba(210,225,240,.25)";ctx.lineWidth=1.6;
+    for(var rn=0;rn<12;rn++){
+      var rx3=stx+((rn*97)%sto.w)-sto.w/2;
+      var ry3=sto.y+((rn*67+scene.t*190)%sto.h)-sto.h/2;
+      ctx.beginPath();ctx.moveTo(rx3,ry3);ctx.lineTo(rx3-6,ry3+13);ctx.stroke();}
+    ctx.lineWidth=1;}
+  // 终点暖色光
+  var gx=L.width-100-cam;
+  if(gx<VIEW_W+120){
+    var fg=ctx.createLinearGradient(gx-140,0,gx+90,0);
+    fg.addColorStop(0,"rgba(255,196,110,0)");fg.addColorStop(0.7,"rgba(255,196,110,.28)");fg.addColorStop(1,"rgba(255,214,140,.5)");
+    ctx.fillStyle=fg;ctx.fillRect(gx-140,0,230,VIEW_H);
+    ctx.fillStyle="rgba(255,232,180,.85)";ctx.beginPath();ctx.arc(gx,VIEW_H/2,26,0,6.283);ctx.fill();
+    ctx.fillStyle="rgba(255,232,180,.25)";ctx.beginPath();ctx.arc(gx,VIEW_H/2,58,0,6.283);ctx.fill();}
+  // 指令涟漪
+  var rc={turn:"57,198,255",scatter:"255,122,77",gather:"125,224,125"};
+  for(var rp=0;rp<scene.ripples.length;rp++){var rip=scene.ripples[rp];
+    var k2=rip.t/0.9;
+    ctx.strokeStyle="rgba("+rc[rip.c]+","+(0.65*(1-k2))+")";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(rip.x-cam,rip.y,40+k2*250,0,6.283);ctx.stroke();
+    ctx.beginPath();ctx.arc(rip.x-cam,rip.y,30+k2*160,0,6.283);ctx.stroke();}
+  ctx.lineWidth=1;
+  // 掉队鸟
+  for(var b1=0;b1<scene.birds.length;b1++){var b=scene.birds[b1];
+    if(b.dead||b.arrived||!b.strag)continue;
+    var bx=b.x-cam;if(bx<-30||bx>VIEW_W+30)continue;
+    ctx.globalAlpha=0.62;
+    drawBird(bx,b.y,b.ang,b.bank,b.phase,0.95,"#d9d2c4","#bcb4a4");
+    ctx.globalAlpha=1;}
+  // 鸟群
+  for(var b2=0;b2<scene.birds.length;b2++){var b4=scene.birds[b2];
+    if(b4.dead||b4.arrived||b4.strag)continue;
+    var bx2=b4.x-cam;if(bx2<-30||bx2>VIEW_W+30)continue;
+    drawBird(bx2,b4.y,b4.ang,b4.bank,b4.phase,1,"#f7f0e1","#e0d4bc");}
+  // 领头鸟
+  var ld=scene.leader,lx2=ld.x-cam;
+  ctx.strokeStyle="rgba(255,255,255,"+(0.35+0.2*Math.sin(scene.t*4))+")";ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(lx2,ld.y,15,0,6.283);ctx.stroke();ctx.lineWidth=1;
+  drawBird(lx2,ld.y,ld.ang,0,ld.phase,1.5,"#ffffff","#f2e6cf");
+  ctx.fillStyle="#e8734a";ctx.beginPath();ctx.arc(lx2+9,ld.y,2.4,0,6.283);ctx.fill();
+  // 鹰 + 俯冲阴影预警
+  for(var e4=0;e4<scene.eagles.length;e4++){var eg2=scene.eagles[e4];
+    var ex=eg2.x-cam;
+    ctx.fillStyle="rgba(0,0,0,"+(eg2.state==="dive"?0.34:0.22)+")";
+    ctx.beginPath();ctx.ellipse(ex+30,Math.min(VIEW_H-8,eg2.y+46),20,7,0,0,6.283);ctx.fill();
+    if(ex>-60&&ex<VIEW_W+60)drawBird(ex,eg2.y,eg2.ang,0,eg2.phase,2.4,"#4a3b30","#38291e");}
+  // 前景云
+  for(var c3=0;c3<ui.clouds.length;c3++){var cl3=ui.clouds[c3];
+    if(cl3.layer!==2)continue;
+    var px3=((cl3.x-cam*0.85)%(VIEW_W+360)+(VIEW_W+360))%(VIEW_W+360)-180;
+    ctx.fillStyle="rgba("+th.cloud+",0.5)";
+    for(var p3=0;p3<cl3.puffs.length;p3++){var p4=cl3.puffs[p3];
+      ctx.beginPath();ctx.arc(px3+p4.dx,cl3.y+p4.dy,p4.r,0,6.283);ctx.fill();}}
+  // 羽毛粒子
+  for(var fe=0;fe<scene.feathers.length;fe++){var ft2=scene.feathers[fe];
+    ctx.globalAlpha=Math.max(0,ft2.life/0.8);
+    ctx.fillStyle="#f7f0e1";
+    ctx.beginPath();ctx.ellipse(ft2.x-cam,ft2.y,4,1.6,ft2.vx*0.02,0,6.283);ctx.fill();}
+  ctx.globalAlpha=1;
+  // 浮动文字
+  ctx.font="700 13px -apple-system,sans-serif";ctx.textAlign="center";
+  for(var fl2=0;fl2<scene.floats.length;fl2++){var fo2=scene.floats[fl2];
+    ctx.globalAlpha=Math.min(1,fo2.life/0.5);
+    ctx.fillStyle=fo2.col;ctx.fillText(fo2.text,fo2.x-cam,fo2.y);}
+  ctx.globalAlpha=1;
+  // 鹰来袭边缘警示
+  for(var e5=0;e5<scene.eagles.length;e5++){var eg3=scene.eagles[e5];
+    var ex3=eg3.x-cam;
+    if(ex3>VIEW_W-8&&eg3.state==="approach"){
+      ctx.fillStyle="rgba(255,90,60,"+(0.5+0.4*Math.sin(scene.t*10))+")";
+      ctx.beginPath();ctx.moveTo(VIEW_W-6,eg3.y);ctx.lineTo(VIEW_W-26,eg3.y-12);ctx.lineTo(VIEW_W-26,eg3.y+12);ctx.closePath();ctx.fill();}}
+  // 罗盘（转向指令瞄准）
+  if(ui.aiming==="turn"){
+    ctx.save();ctx.translate(lx2,ld.y);
+    ctx.fillStyle="rgba(15,25,35,.4)";ctx.beginPath();ctx.arc(0,0,56,0,6.283);ctx.fill();
+    ctx.strokeStyle="rgba(255,255,255,.5)";ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(0,0,56,0,6.283);ctx.stroke();
+    for(var k3=0;k3<8;k3++){
+      ctx.save();ctx.rotate(k3*Math.PI/4);
+      ctx.fillStyle=k3===ui.aimIdx?"#ffd76a":"rgba(255,255,255,.55)";
+      ctx.beginPath();ctx.moveTo(47,0);ctx.lineTo(31,-7);ctx.lineTo(31,7);ctx.closePath();ctx.fill();
+      ctx.restore();}
+    ctx.restore();ctx.lineWidth=1;}
+  // 新手提示
+  if(scene.hint>0&&scene.idx===0){
+    ctx.globalAlpha=Math.min(1,scene.hint);
+    ctx.fillStyle="#fff";ctx.font="700 15px -apple-system,sans-serif";ctx.textAlign="center";
+    ctx.fillText("DRAG to lead the flock — whistle TURN / SCATTER / GATHER",VIEW_W/2,72);
+    ctx.globalAlpha=1;}
+}
+
+/* ---------- G+. 结算数据（纯函数，Node 可测） ---------- */
+function computeResult(sc){
+  var arr=sc.arrived,total=FLOCK_N;
+  var score=arr*20+sc.bugs*2;
+  var rate=arr/total;
+  return {arrived:arr,dead:sc.dead,lost:total-arr-sc.dead,bugs:sc.bugs,
+    score:score,rate:rate,
+    stars:rate>=0.9?3:rate>=0.6?2:rate>=0.3?1:0};
+}
+
+/* ---------- G. UI / 输入 / 主循环（浏览器层） ---------- */
+function bootUI(){
+  var $=function(id){return document.getElementById(id);};
+  canvas=$("game");ctx=canvas.getContext("2d");
+  var stage=$("stage");
+  var scene=null,paused=false,aiming=null,aimIdx=0,resultShown=false;
+  var keyDir={x:0,y:0},keys={},dragging=false;
+  var chirpT=1;
+  // 云层（全局复用）
+  var crng=mulberry32(20250101),clouds=[];
+  for(var ci=0;ci<15;ci++){
+    var puffs=[],pn=3+Math.floor(crng()*3),px0=0;
+    for(var pi=0;pi<pn;pi++)puffs.push({dx:pi*30-30+crng()*14,dy:(crng()-0.5)*16,r:12+crng()*13});
+    clouds.push({x:crng()*1300,y:30+crng()*440,layer:ci%3,puffs:puffs});
+  }
+  var ui={clouds:clouds,get aiming(){return aiming;},get aimIdx(){return aimIdx;}};
+  // ---- 自适应（横屏优先） ----
+  function fit(){
+    var availW=window.innerWidth-8,availH=window.innerHeight-38;
+    var s=Math.min(availW/VIEW_W,availH/VIEW_H);
+    var cw=Math.floor(VIEW_W*s),ch=Math.floor(VIEW_H*s);
+    dprScale=s;
+    canvas.width=Math.floor(cw*(window.devicePixelRatio||1));
+    canvas.height=Math.floor(ch*(window.devicePixelRatio||1));
+    canvas.style.width=cw+"px";canvas.style.height=ch+"px";
+    stage.style.setProperty("--s",String(Math.max(0.62,Math.min(1.25,s))));
+    ctx.setTransform(canvas.width/VIEW_W,0,0,canvas.height/VIEW_H,0,0);
+  }
+  window.addEventListener("resize",fit);fit();
+  // ---- 本地存储（try/catch，可禁用） ----
+  function loadBest(i){try{return parseInt(localStorage.getItem("fl_best"+i)||"0",10)||0;}catch(e){return 0;}}
+  function saveBest(i,v){try{localStorage.setItem("fl_best"+i,String(v));}catch(e){}}
+  function loadStars(i){try{return parseInt(localStorage.getItem("fl_stars"+i)||"0",10)||0;}catch(e){return 0;}}
+  function saveStars(i,v){try{localStorage.setItem("fl_stars"+i,String(v));}catch(e){}}
+  try{muted=localStorage.getItem("fl_mute")==="1";}catch(e){}
+  // ---- 平台埋点（域名守卫加载器已设 window.__portal） ----
+  function pgStart(){try{
+    if(window.__portal==="crazygames"&&window.CrazyGames&&window.CrazyGames.SDK)window.CrazyGames.SDK.game.gameplayStart();
+  }catch(e){}}
+  function pgStop(happy){try{
+    if(window.__portal==="crazygames"&&window.CrazyGames&&window.CrazyGames.SDK){
+      window.CrazyGames.SDK.game.gameplayStop();
+      if(happy)window.CrazyGames.SDK.game.happytime();}
+  }catch(e){}}
+  // ---- 屏幕/面板 ----
+  var overlay=$("overlay"),panel=$("panel");
+  function showPanel(html){panel.innerHTML=html;overlay.classList.add("show");}
+  function hidePanel(){overlay.classList.remove("show");}
+  function starsStr(n){return "★★★".slice(0,n)+"☆☆☆".slice(0,3-n);}
+  function showMenu(){
+    paused=false;aiming=null;
+    if(scene)pgStop(false);
+    var h="<h1>FLOCK LEADER</h1><div class='sub'>GUIDE THE MIGRATION SOUTH</div>"+
+      "<div class='how'>You are the <b>lead bird</b> — the flock behind you flies with a mind of its own "+
+      "(separation · alignment · cohesion). Reshape the whole flock with whistle commands:<br>"+
+      "<span class='c1'>TURN</span> — pick a compass heading, the flock banks that way with inertia<br>"+
+      "<span class='c2'>SCATTER</span> — burst apart to dodge hawks and mountain walls<br>"+
+      "<span class='c3'>GATHER</span> — tighten formation for canyons and storms<br>"+
+      "Drag anywhere to fly. Feed on insect swarms (+2). Rest at islands to heal stragglers. Bring as many birds home as you can.</div>"+
+      "<div id='lvGrid'>";
+    for(var i=0;i<LEVELS.length;i++){
+      var st=loadStars(i),bs=loadBest(i);
+      h+="<button class='lvBtn' type='button' data-lv='"+i+"'><span class='n'>LEVEL "+(i+1)+"</span><span class='nm'>"+LEVELS[i].name+"</span><span class='stars'>"+starsStr(st)+"</span><span class='bs'>"+(bs>0?"BEST "+bs:"—")+"</span></button>";
+    }
+    h+="</div><button class='bigBtn' id='btnQuick' type='button'>START MIGRATION</button>";
+    showPanel(h);
+    var btns=panel.querySelectorAll(".lvBtn");
+    for(var b2=0;b2<btns.length;b2++)(function(b){
+      b.addEventListener("click",function(){startLevel(parseInt(b.getAttribute("data-lv"),10));});
+    })(btns[b2]);
+    $("btnQuick").addEventListener("click",function(){startLevel(0);});
+  }
+  function showResults(sc){
+    resultShown=true;
+    var r=computeResult(sc);
+    var score=r.score,stars=r.stars,rate=r.rate;
+    var best=loadBest(sc.idx);
+    var isBest=score>best;
+    if(isBest){best=score;saveBest(sc.idx,best);}
+    if(stars>loadStars(sc.idx))saveStars(sc.idx,stars);
+    var h="<h2>MIGRATION COMPLETE</h2><div class='sub'>"+LEVELS[sc.idx].name+"</div>"+
+      "<div class='bigstars'>"+starsStr(stars)+"</div>"+
+      "<div class='rrow'><span>Arrived</span><b>"+r.arrived+" × 20 = "+r.arrived*20+"</b></div>"+
+      "<div class='rrow'><span>Insects eaten</span><b>"+r.bugs+" × 2 = "+r.bugs*2+"</b></div>"+
+      "<div class='rrow'><span>Lost to hawks, peaks & storms</span><b>"+(r.dead+r.lost)+"</b></div>"+
+      "<div class='rrow'><span>Survival rate</span><b>"+Math.round(rate*100)+"%</b></div>"+
+      "<div class='rtotal'>"+score+"</div>"+
+      "<div class='sub'>"+(isBest?"NEW BEST!":"BEST "+best)+"</div>";
+    if(sc.idx<LEVELS.length-1)h+="<button class='bigBtn' id='btnNext' type='button'>NEXT LEVEL</button>";
+    h+="<button class='bigBtn sec' id='btnRetry' type='button'>RETRY</button>"+
+       "<button class='bigBtn sec' id='btnMenu' type='button'>MENU</button>";
+    showPanel(h);
+    pgStop(stars>=3);
+    if($("btnNext"))$("btnNext").addEventListener("click",function(){startLevel(sc.idx+1);});
+    $("btnRetry").addEventListener("click",function(){startLevel(sc.idx);});
+    $("btnMenu").addEventListener("click",showMenu);
+  }
+  function showPause(){
+    paused=true;
+    showPanel("<h2>PAUSED</h2><button class='bigBtn' id='btnResume' type='button'>RESUME</button>"+
+      "<button class='bigBtn sec' id='btnRestart' type='button'>RESTART</button>"+
+      "<button class='bigBtn sec' id='btnMenu2' type='button'>MENU</button>");
+    pgStop(false);
+    $("btnResume").addEventListener("click",function(){paused=false;hidePanel();pgStart();});
+    $("btnRestart").addEventListener("click",function(){startLevel(scene.idx);});
+    $("btnMenu2").addEventListener("click",showMenu);
+  }
+  function startLevel(i){
+    scene=newScene(i);paused=false;aiming=null;resultShown=false;
+    hidePanel();pgStart();audioInit();
+    $("hLevel").textContent=LEVELS[i].name;
+  }
+  // ---- 输入 ----
+  function toWorld(clientX,clientY){
+    var r=canvas.getBoundingClientRect();
+    return {x:(clientX-r.left)/r.width*VIEW_W+scene.cam.x,y:(clientY-r.top)/r.height*VIEW_H};
+  }
+  canvas.addEventListener("pointerdown",function(e){
+    e.preventDefault();audioInit();
+    if(!scene||paused||scene.state!=="play")return;
+    var p=toWorld(e.clientX,e.clientY);
+    if(aiming==="turn"){
+      var a=Math.atan2(p.y-scene.leader.y,p.x-scene.leader.x);
+      a=Math.round(a/(Math.PI/4))*(Math.PI/4);
+      if(issueCommand(scene,"turn",a))aiming=null;
+      return;
+    }
+    dragging=true;scene.leader.tx=p.x;scene.leader.ty=p.y;
+  });
+  canvas.addEventListener("pointermove",function(e){
+    if(!dragging||!scene||paused)return;
+    var p=toWorld(e.clientX,e.clientY);
+    scene.leader.tx=p.x;scene.leader.ty=p.y;
+  });
+  window.addEventListener("pointerup",function(){dragging=false;});
+  canvas.addEventListener("contextmenu",function(e){e.preventDefault();});
+  document.addEventListener("touchmove",function(e){
+    if(e.target===canvas)e.preventDefault();
+  },{passive:false});
+  // 指令按钮
+  function tryCmd(type){
+    if(!scene||paused||scene.state!=="play")return;
+    audioInit();
+    if(type==="turn"){
+      if(scene.cds.turn>0)return;
+      aiming="turn";
+      aimIdx=((Math.round(Math.atan2(scene.leader.diry,scene.leader.dirx)/(Math.PI/4))%8)+8)%8;
+      return;
+    }
+    issueCommand(scene,type,0);
+  }
+  $("cmdTurn").addEventListener("click",function(e){e.stopPropagation();tryCmd("turn");});
+  $("cmdScatter").addEventListener("click",function(e){e.stopPropagation();tryCmd("scatter");});
+  $("cmdGather").addEventListener("click",function(e){e.stopPropagation();tryCmd("gather");});
+  document.addEventListener("keydown",function(e){
+    var k=e.key;
+    keys[k]=true;
+    if(k==="m"||k==="M"){toggleMute();return;}
+    if(k==="p"||k==="P"){if(scene&&!resultShown){if(paused){paused=false;hidePanel();pgStart();}else showPause();}return;}
+    if(!scene||paused||scene.state!=="play")return;
+    if(aiming==="turn"){
+      if(k==="Enter"||k===" "||k==="1"||k==="q"||k==="Q"){
+        e.preventDefault();
+        if(issueCommand(scene,"turn",aimIdx*Math.PI/4))aiming=null;
+        return;
+      }
+      if(k==="Escape"){aiming=null;return;}
+      // 方向键（含双键组合）选罗盘方向：0=东，2=南，4=西，6=北
+      var vx=(keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0);
+      var vy=(keys.ArrowDown?1:0)-(keys.ArrowUp?1:0);
+      if(vx||vy){
+        var a=Math.atan2(vy,vx);
+        aimIdx=((Math.round(a/(Math.PI/4))%8)+8)%8;
+      }
+      return;
+    }
+    if(k==="1"||k==="q"||k==="Q")tryCmd("turn");
+    else if(k==="2"||k==="e"||k==="E")tryCmd("scatter");
+    else if(k==="3"||k==="r"||k==="R")tryCmd("gather");
+    else if(k===" "||k==="ArrowUp"||k==="ArrowDown")e.preventDefault();
+  });
+  document.addEventListener("keyup",function(e){keys[e.key]=false;});
+  // 键盘持续 steering
+  function keySteer(){
+    if(!scene||paused)return;
+    var vx=(keys.ArrowRight||keys.d||keys.D?1:0)-(keys.ArrowLeft||keys.a||keys.A?1:0);
+    var vy=(keys.ArrowDown||keys.s||keys.S?1:0)-(keys.ArrowUp||keys.w||keys.W?1:0);
+    if(vx||vy){scene.leader.tx=scene.leader.x+vx*130;scene.leader.ty=clamp(scene.leader.y+vy*130,40,VIEW_H-40);}
+  }
+  // ---- 静音 ----
+  function toggleMute(){
+    muted=!muted;
+    try{localStorage.setItem("fl_mute",muted?"1":"0");}catch(e){}
+    if(master)master.gain.value=muted?0:0.5;
+    $("btnMute").textContent=muted?"OFF":"SND";
+  }
+  $("btnMute").addEventListener("click",function(e){e.stopPropagation();audioInit();toggleMute();});
+  $("btnPause").addEventListener("click",function(e){e.stopPropagation();if(scene&&!resultShown)showPause();});
+  document.addEventListener("visibilitychange",function(){
+    if(document.hidden&&scene&&scene.state==="play"&&!paused&&!resultShown)showPause();
+  });
+  // ---- HUD 同步 ----
+  function syncHUD(){
+    if(!scene)return;
+    var alive=0;
+    for(var i=0;i<scene.birds.length;i++){var b=scene.birds[i];if(!b.dead&&!b.arrived)alive++;}
+    $("hFlock").textContent=alive+"/"+FLOCK_N;
+    $("hScore").textContent=scene.score;
+    $("progFill").style.width=clamp(scene.leader.x/scene.lvl.width*100,0,100)+"%";
+    var cds={turn:$("stTurn"),scatter:$("stScatter"),gather:$("stGather")};
+    var cdsO={turn:$("cdTurn"),scatter:$("cdScatter"),gather:$("cdGather")};
+    for(var c in CMDDEF){
+      var cd=scene.cds[c],mx=CMDDEF[c].cd;
+      if(cd>0){cds[c].textContent=cd.toFixed(1);cds[c].style.color="#e07050";
+        cdsO[c].style.height=(cd/mx*100)+"%";}
+      else{cds[c].textContent="READY";cds[c].style.color="#9fd6a8";cdsO[c].style.height="0%";}
+    }
+    $("cmdTurn").className="cmd"+(aiming==="turn"?" aiming":"");
+  }
+  // ---- 事件 → 音效/特效 ----
+  var feedSndT=0;
+  function handleEvents(sc){
+    for(var i=0;i<sc.events.length;i++){var ev=sc.events[i];
+      if(ev.type==="death"){
+        for(var f=0;f<6;f++)sc.feathers.push({x:ev.x,y:ev.y,vx:(Math.random()-0.5)*90,vy:-30-Math.random()*60,life:0.8});
+        sfxDeath();
+      }else if(ev.type==="feed"){
+        if(sc.floats.length<26)sc.floats.push({x:ev.x,y:ev.y-10,text:"+2",life:0.8,col:"#ffe9a8"});
+        if(sc.t-feedSndT>0.09){sfxFeed();feedSndT=sc.t;}
+      }else if(ev.type==="cmd")sfxCmd(ev.cmd);
+      else if(ev.type==="eagle")sfxEagle();
+      else if(ev.type==="dive")beep(1700,0.3,"sawtooth",0.07,600);
+      else if(ev.type==="arrive")sfxArrive();
+      else if(ev.type==="gate")sfxGate();
+      else if(ev.type==="rest")beep(700,0.25,"sine",0.07,1050);
+      else if(ev.type==="strike")beep(240,0.2,"square",0.09,120);
+    }
+  }
+  // ---- 主循环 ----
+  var last=0,acc=0;
+  function frame(t){
+    var dt=Math.min((t-last)/1000,0.1);last=t;
+    if(scene){
+      if(!paused&&scene.state==="play"){
+        keySteer();
+        acc+=dt;var step=1/60,n=0;
+        while(acc>=step&&n<4){stepScene(scene,step);acc-=step;n++;}
+        if(acc>0.25)acc=0;
+        handleEvents(scene);
+        // 鸟群鸣叫密度随鸟数
+        chirpT-=dt;
+        if(chirpT<=0){
+          var alive=0;
+          for(var i=0;i<scene.birds.length;i++){var bb=scene.birds[i];if(!bb.dead&&!bb.arrived)alive++;}
+          if(alive>3)beep(1500+Math.random()*1000,0.05+Math.random()*0.06,"sine",0.035,1900+Math.random()*500);
+          chirpT=0.3+Math.random()*1.5*Math.sqrt(60/Math.max(1,alive));
+        }
+        // 风暴风噪随领头鸟距离
+        var sl=0;
+        for(var s=0;s<scene.lvl.storms.length;s++){var st=scene.lvl.storms[s];
+          var dxx=Math.max(0,Math.abs(scene.leader.x-st.x)-st.w/2);
+          var dyy=Math.max(0,Math.abs(scene.leader.y-st.y)-st.h/2);
+          sl=Math.max(sl,clamp(1-hyp(dxx,dyy)/300,0,1));}
+        stormSet(sl);
+        if(scene.state==="done"&&!resultShown)showResults(scene);
+      }
+      render(scene,ui);
+      syncHUD();
+    }
+    requestAnimationFrame(frame);
+  }
+  $("btnMute").textContent=muted?"OFF":"SND";
+  showMenu();
+  requestAnimationFrame(frame);
+  // 调试/测试钩子（不影响游戏逻辑）
+  if(typeof window!=="undefined"){
+    window.__FL={get scene(){return scene;},newScene:newScene,stepScene:stepScene,
+      issueCommand:issueCommand,genLevel:genLevel,LEVELS:LEVELS,BP:BP,CMDDEF:CMDDEF,
+      showResults:showResults,computeResult:computeResult};
+  }
+}
+/* ---------- H. 启动（Node 环境跳过 UI） ---------- */
+if(typeof document!=="undefined"&&document.getElementById("game"))bootUI();
+</script>
+</body>
+</html>
